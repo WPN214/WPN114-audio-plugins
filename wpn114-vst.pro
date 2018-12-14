@@ -4,7 +4,7 @@ CONFIG += c++11 dll
 QT += quick
 
 QMLDIR_FILES += $$PWD/qml/qmldir
-DESTDIR = $$[QT_INSTALL_QML]/WPN114/Vst
+DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio/Vst
 
 for(FILE,QMLDIR_FILES) {
     QMAKE_POST_LINK += $$quote(cp $${FILE} $${DESTDIR}$$escape_expand(\n\t))

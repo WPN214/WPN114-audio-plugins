@@ -3,12 +3,13 @@ TEMPLATE = lib
 CONFIG += c++11 dll
 QT += quick widgets
 
-localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Time
+localmod: DESTDIR = $$QML_MODULE_DESTDIR/WPN114/Audio/Vst
 else {
-    DESTDIR = $$[QT_INSTALL_QML]/WPN114/Time
+    DESTDIR = $$[QT_INSTALL_QML]/WPN114/Audio/Vst
     QML_MODULE_DESTDIR = $$[QT_INSTALL_QML]
 }
 
+QMLDIR_FILES += $$PWD/qml/qmldir
 for(FILE,QMLDIR_FILES) {
     QMAKE_POST_LINK += $$quote(cp $${FILE} $${DESTDIR}$$escape_expand(\n\t))
 }
@@ -16,7 +17,7 @@ for(FILE,QMLDIR_FILES) {
 WPN114_AUDIO_REPOSITORY = ../WPN114-audio
 INCLUDEPATH += $$WPN114_AUDIO_REPOSITORY
 LIBS += -L$$QML_MODULE_DESTDIR/WPN114/Audio -lWPN114-audio
-QMAKE_LFLAGS += -Wl,-rpath,$$QML_MODULE_DESTDIR/WPN114/Audio
+QMAKE_RPATHDIR += $$QML_MODULE_DESTDIR/WPN114/Audio
 
 macx {
     LIBS += -framework CoreFoundation

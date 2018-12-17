@@ -1,0 +1,108 @@
+import QtQuick.tooling 1.2
+
+Module
+{
+    Component
+    {
+        name: "VstPlugin"
+        prototype: "StreamNode"
+        exports: ["WPN114.Audio.Vst/VstPlugin 1.0"]
+
+        Property { name: "path"; type: "string" }
+        Property { name: "chunk"; type: "string" }
+        Property { name: "program"; type: "int" }
+        Property { name: "programs"; type: "QStringList" }
+        Property { name: "parameters"; type: "QStringList" }
+
+        Method { name: "showEditorWindow" }
+        Method { name: "allNotesOff" }
+
+        Method
+        {
+            name: "set"
+            Parameter { name: "name"; type: "string" }
+            Parameter { name: "value"; type: "real" }
+        }
+
+        Method
+        {
+            name: "set"
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "value"; type: "real" }
+        }
+
+        Method
+        {
+            name: "get"
+            type: "real"
+            Parameter { name: "name"; type: "string" }
+        }
+
+        Method
+        {
+            name: "get"
+            type: "real"
+            Parameter { name: "index"; type: "int" }
+        }
+
+        Method
+        {
+            name: "noteOn"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "noteOff"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "control"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "programChange"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "bend"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "aftertouch"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "aftertouch"
+            Parameter { name: "channel"; type: "int" }
+            Parameter { name: "index"; type: "int" }
+            Parameter { name: "value"; type: "int" }
+        }
+
+        Method
+        {
+            name: "sysex"
+            Parameter { name: "bytes"; type: "QVariantList" }
+        }
+
+    }
+}

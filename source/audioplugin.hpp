@@ -2,28 +2,42 @@
 #define AUDIOPLUGIN_H
 
 #include <QObject>
-#include <source/audio.hpp>
+#include <QWidget>
 #include <external/vst/aeffect.h>
 #include <external/vst/aeffectx.h>
+#include <wpn114audio/graph.hpp>
 
+#ifdef __APPLE__
 #include <QMacNativeWidget>
 #include <QMacCocoaViewContainer>
-#include <QQueue>
-#include <QMutex>
-#include <QMutexLocker>
+#endif
 
-static VstIntPtr VSTCALLBACK HostCallback
-(AEffect* effect, VstInt32 opcode, VstInt32 index, VstIntPtr value, void* ptr, float opt);
-typedef AEffect* (*PluginEntryProc) (audioMasterCallback audioMaster);
+#ifdef __linux__
+#include <dlfcn.h>
+#endif
 
-enum class version
+//-------------------------------------------------------------------------------------------------
+using vstint32_t        = VstInt32;
+using vstptr_t          = VstIntPtr;
+using aeffect           = AEffect;
+using master_callback   = audioMasterCallback;
+
+typedef aeffect* (*vstentry_t)(master_callback);
+
+//-------------------------------------------------------------------------------------------------
+enum class typeversion
+//-------------------------------------------------------------------------------------------------
 {
     AU          = 1,
     VST2X       = 2,
-    VST3X       = 3
+    VST3X       = 3,
+    LV2         = 4,
+    AAX         = 5
 };
 
+//-------------------------------------------------------------------------------------------------
 enum class MIDI
+//-------------------------------------------------------------------------------------------------
 {
     SYSEX                   = 0xf0,
     EOX                     = 0xf7,
@@ -36,152 +50,163 @@ enum class MIDI
     PITCH_BEND              = 0xe0
 };
 
-#define AUDIO_PLUGIN_INTERFACE(pure) \
-    public: \
-    virtual void                        configure(const uint32_t srate, const uint16_t bsize) pure ;\
-    virtual uint16_t                    get_nparameters() const pure; \
-    virtual uint16_t                    get_nprograms() const pure; \
-    virtual uint16_t                    get_ninputs() const pure; \
-    virtual uint16_t                    get_noutputs() const pure; \
-    virtual std::string                 get_parameter_name(uint16_t index) const pure; \
-    virtual std::string                 get_program_name(uint16_t index) const pure; \
-    virtual float                       get_parameter_value(const uint16_t index) const pure ; \
-    virtual void                        set_parameter_value(const uint16_t index, float value, bool normalized) pure; \
-    virtual void                        set_program(const uint16_t index) pure ; \
-    virtual void                        set_program_name(const std::string name) pure; \
-    virtual QByteArray                  get_chunk() pure; \
-    virtual void                        set_chunk(QByteArray) pure; \
-    virtual void                        process_midi_offline() pure; \
-    virtual void                        process_midi(const uint8_t data[4]) pure; \
-    virtual void                        process_audio(float** inputs, float** outputs, const uint16_t nsamples) pure; \
-    virtual void                        process_audio(float**& outputs, const uint16_t nsamples) pure; \
-    virtual void                        open_editor(void* view) pure; \
-    virtual version                     get_version() const pure; \
-    virtual std::array<uint16_t,2>      get_editor_size() const pure;
-
-class plugin_hdl
-{
-    AUDIO_PLUGIN_INTERFACE( =0 )
-    virtual ~plugin_hdl() {}
-
-    void set_world(WorldStream* world) { m_world = world; }
-
-    protected:
-    WorldStream* m_world = nullptr;
-    qint64 m_clock = 0;
-    std::string m_path;
-};
-
-class vst3x_plugin : public plugin_hdl
-{
-    AUDIO_PLUGIN_INTERFACE ( )
-    vst3x_plugin( const std::string path );
-    vst3x_plugin( const vst3x_plugin& ) = delete;
-    vst3x_plugin& operator= ( const vst3x_plugin& ) = delete;
-    vst3x_plugin( vst3x_plugin&& ) = delete;
-    ~vst3x_plugin();
-};
-
-class vst2x_plugin : public plugin_hdl
-{
-    AUDIO_PLUGIN_INTERFACE ( )
-    vst2x_plugin( const std::string path );
-    vst2x_plugin( const vst2x_plugin& ) = delete;
-    vst2x_plugin& operator= ( const vst2x_plugin& ) = delete;
-    vst2x_plugin( vst2x_plugin&& ) = delete;
-    ~vst2x_plugin();
-
-    private:
-    void set_delta(quint16 clock);
-
-    void* m_module = nullptr;
-    QMutex m_delta_mtx;
-    qint64 m_delta_frames = 0;
-    VstEvents* m_event_queue;
-    AEffect* m_aeffect;
-};
-
-// QT INSTANCE --------------------------------------------------------------------
-
-class AudioPlugin : public StreamNode
+//=================================================================================================
+class Vst2x : public Node
+//=================================================================================================
 {
     Q_OBJECT
-    Q_INTERFACES    ( QQmlParserStatus )
-    Q_PROPERTY      ( QString path READ path WRITE setPath NOTIFY pathChanged )
-    Q_PROPERTY      ( int program READ program WRITE setProgram NOTIFY programChanged )
-    Q_PROPERTY      ( QStringList programs READ programs )
-    Q_PROPERTY      ( QStringList parameters READ parameters )
-    Q_PROPERTY      ( QString chunk READ chunk WRITE setChunk )
-    Q_PROPERTY      ( WorldStream* world READ world WRITE setWorld )
+
+    WPN_DECLARE_DEFAULT_AUDIO_INPUT  (audio_in, 0)
+    WPN_DECLARE_DEFAULT_AUDIO_OUTPUT (audio_out, 0)
+    WPN_DECLARE_DEFAULT_MIDI_INPUT   (midi_in, 0)
+    WPN_DECLARE_DEFAULT_MIDI_OUTPUT  (midi_out, 0)
+
+    Q_PROPERTY (QString path READ path WRITE set_path)
+
+    QString
+    m_path;
+
+    void*
+    m_dl = nullptr;
+
+    aeffect*
+    m_aeffect = nullptr;
+
+    QWidget*
+    m_view = nullptr;
 
 public:
-    AudioPlugin();
-    ~AudioPlugin() override;
 
-    virtual float** process ( float**, qint64 ) override;
-    virtual void initialize ( qint64 ) override;
-    virtual void componentComplete() override;
+    //---------------------------------------------------------------------------------------------
+    Q_SIGNAL void
+    loaded();
 
-    WorldStream* world      ( ) const { return m_world_stream; }
-    QString chunk           ( ) { return m_chunk; }
-    quint16 program         ( ) const;
-    QString path            ( ) const;
-    QStringList programs    ( );
-    QStringList parameters  ( );
+    //---------------------------------------------------------------------------------------------
+    static vstptr_t VSTCALLBACK
+    callback(aeffect* effect, vstint32_t opcode, vstint32_t index, vstptr_t value, void* ptr, float opt)
+    //---------------------------------------------------------------------------------------------
+    {
+        vstptr_t result = 0;
 
-    void setWorld       ( WorldStream* world ) { m_world_stream = world; }
-    void setChunk       ( QString name  );
-    void setPath        ( const QString );
-    void setProgram     ( const quint16 );
+        switch(opcode)
+        {
+        case audioMasterAutomate: break;
+        case audioMasterCurrentId: break;
+        case audioMasterVersion: return 2400;
+        case audioMasterIdle: return 1;
+        case audioMasterGetCurrentProcessLevel: return kVstProcessLevelUser;
+        case audioMasterGetProductString:
+            std::copy_n("wpn214", 7, static_cast<char*>(ptr));
+        }
 
-    public slots:
+        return result;
+    }
 
-    Q_INVOKABLE void showEditorWindow();
+    //---------------------------------------------------------------------------------------------
+    Vst2x() : m_view(new QWidget)
+    //---------------------------------------------------------------------------------------------
+    {
 
-    Q_INVOKABLE void set(QString name, float value, bool normalized = false );
-    Q_INVOKABLE void set(int index, float value);
+    }
 
-    Q_INVOKABLE float get(QString name) const;
-    Q_INVOKABLE float get(int index) const;
-    Q_INVOKABLE void save(QString name);
+    //---------------------------------------------------------------------------------------------
+    virtual
+    ~Vst2x() override
+    //---------------------------------------------------------------------------------------------
+    {
+        delete m_view;
+    }
 
-    Q_INVOKABLE void loadChunk(QString name);
-    Q_INVOKABLE void saveChunk(QString name);
+    //---------------------------------------------------------------------------------------------
+    QString
+    path() const { return m_path; }
 
-    Q_INVOKABLE void noteOn(int channel, int index, int value);
-    Q_INVOKABLE void noteOff(int channel, int index, int value);
-    Q_INVOKABLE void control(int channel, int index, int value);
-    Q_INVOKABLE void programChange(int channel, int value);
-    Q_INVOKABLE void bend(int channel, int value);
-    Q_INVOKABLE void aftertouch(int channel, int value);
-    Q_INVOKABLE void aftertouch(int channel, int index, int value);
-    Q_INVOKABLE void sysex(QVariantList bytes);   
+    //---------------------------------------------------------------------------------------------
+    void
+    set_path(QString path)
+    //---------------------------------------------------------------------------------------------
+    {
+        m_path = path;
+    }
 
-    Q_INVOKABLE void allNotesOff();
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    componentComplete() override
+    //---------------------------------------------------------------------------------------------
+    {
+        m_dl = dlopen(CSTR(m_path), RTLD_NOW);
 
-signals:
-    void pathChanged();
-    void pluginLoaded();
-    void programChanged();
-    void parameterChanged();
+        auto proc = (vstentry_t) dlsym(m_dl, "VSTPluginMain");
+        if  (proc == nullptr)
+             proc = (vstentry_t) dlsym(m_dl, "main");
 
-private:
-    void push( MIDI command, int channel, int value );
-    void push( MIDI command, int channel, int index, int value );
+        assert(proc); // for now..
+        m_aeffect = proc(callback);
+        m_aeffect->dispatcher(m_aeffect, effOpen, 0, 0, nullptr, 0);
 
-    quint16             m_program;
-    QString             m_path;
-    plugin_hdl*         m_plugin_hdl;
-    QStringList         m_programs;
-    QStringList         m_parameters;
-    QString             m_chunk;
-    WorldStream*        m_world_stream;
+        uint16_t
+        esize[2] = { 0, 0 };
 
-#ifdef __APPLE__
-    QMacNativeWidget*           m_view;
-    QMacCocoaViewContainer*     m_view_container;
-#endif
+        ERect* rect = nullptr;
+        m_aeffect->dispatcher(m_aeffect, effEditGetRect, 0, 0, &rect, 0);
 
+        if (rect) {
+            esize[0] = rect->right-rect->left;
+            esize[1] = rect->bottom-rect->top;
+        }
+
+        m_view->setFixedSize(esize[0], esize[1]);
+        m_view->update();
+        emit loaded();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    Q_INVOKABLE void
+    display()
+    //---------------------------------------------------------------------------------------------
+    {
+        m_aeffect->dispatcher(m_aeffect, effEditOpen, 0, 0, (void*) m_view->winId(), 0);
+        m_view->show();
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    initialize(Graph::properties const& properties) override
+    //---------------------------------------------------------------------------------------------
+    {
+        m_aeffect->dispatcher(m_aeffect, effSetSampleRate, 0, 0, nullptr, properties.rate);
+        m_aeffect->dispatcher(m_aeffect, effSetBlockSize, 0, properties.vector, nullptr, 0);
+        m_aeffect->dispatcher(m_aeffect, effMainsChanged, 0, 1, nullptr, 0);
+        m_aeffect->dispatcher(m_aeffect, effStartProcess, 0, 0, nullptr, 0);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    on_rate_changed(sample_t rate) override
+    //---------------------------------------------------------------------------------------------
+    {
+        m_aeffect->dispatcher(m_aeffect, effSetSampleRate, 0, 0, nullptr, rate);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    virtual void
+    rwrite(pool& inputs, pool& outputs, vector_t nframes) override
+    //---------------------------------------------------------------------------------------------
+    {
+        auto audio_in  = inputs.audio[0];
+        auto audio_out = outputs.audio[0];
+        auto midi_in   = inputs.midi[0];
+        auto midi_out  = outputs.midi[0];
+
+        // send midi events first
+        for (auto& mt : *midi_in[0])
+        {
+            // TODO
+            m_aeffect->dispatcher(m_aeffect, effProcessEvents, 0, 0, events, 0);
+        }
+
+        m_aeffect->processReplacing(m_aeffect, audio_in, audio_out, nframes);
+    }
 };
 
 #endif // AUDIOPLUGIN_H

@@ -4,9 +4,13 @@
 #include <QQmlEngine>
 #include <qqml.h>
 
-void qml_plugin::registerTypes(const char *uri)
+//-------------------------------------------------------------------------------------------------
+void
+qml_plugin::registerTypes(const char *uri)
+//-------------------------------------------------------------------------------------------------
 {
-    Q_UNUSED    ( uri );
+    Q_UNUSED(uri)
 
-    qmlRegisterType<AudioPlugin, 1> ( "WPN114.Audio.Vst", 1, 0, "VstPlugin" );
+    qmlRegisterType<AudioPlugin, 1>
+    ("WPN114.Audio.Plugins", 1, 0, "VstPlugin");
 }

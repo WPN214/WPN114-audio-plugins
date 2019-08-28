@@ -65,8 +65,12 @@
 	#pragma -a8
 	#pragma options push -a8
 #elif defined(__GNUC__)
-    #pragma pack(push,8)
-    #define VSTCALLBACK __cdecl
+    #ifdef __linux__
+        #define VSTCALLBACK
+    #else
+        #pragma pack(push,8)
+        #define VSTCALLBACK __cdecl
+    #endif
 #elif defined(WIN32) || defined(__FLAT__) || defined CBUILDER
 	#pragma pack(push)
 	#pragma pack(8)

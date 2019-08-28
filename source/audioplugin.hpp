@@ -202,7 +202,7 @@ public:
         for (auto& mt : *midi_in[0])
         {
             // TODO
-            m_aeffect->dispatcher(m_aeffect, effProcessEvents, 0, 0, events, 0);
+//            m_aeffect->dispatcher(m_aeffect, effProcessEvents, 0, 0, events, 0);
         }
 
         m_aeffect->processReplacing(m_aeffect, audio_in, audio_out, nframes);

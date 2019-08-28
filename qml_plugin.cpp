@@ -11,6 +11,6 @@ qml_plugin::registerTypes(const char *uri)
 {
     Q_UNUSED(uri)
 
-    qmlRegisterType<AudioPlugin, 1>
-    ("WPN114.Audio.Plugins", 1, 1, "AudioPlugin");
+    qmlRegisterType<Vst2x, 1>
+    ("WPN114.Audio.Plugins", 1, 1, "Vst2x");
 }

@@ -1,5 +1,5 @@
 module WPN114.Audio.Plugins
-typeinfo vst.qmltypes
+typeinfo plugins.qmltypes
 plugin wpn114plugins
 classname qml_plugin
 depends WPN114.Audio 1.1
